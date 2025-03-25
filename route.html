@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Route Cipher Encoder/Decoder with Descriptive Steps</title>
+  <title>Route Cipher Encoder/Decoder with Toggle Modes</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -21,16 +21,19 @@
       display: block;
       margin-bottom: 0.3em;
     }
-    textarea {
+    select, textarea {
       width: 100%;
       padding: 0.5em;
       font-size: 16px;
       box-sizing: border-box;
+      margin-bottom: 0.5em;
     }
     button {
       padding: 0.6em 1.2em;
       font-size: 16px;
       cursor: pointer;
+      display: block;
+      margin: 0 auto;
     }
     /* Canvas styles */
     canvas {
@@ -38,7 +41,7 @@
       display: block;
       margin: 1em auto;
     }
-    /* Results table: 4 rows x 2 columns */
+    /* Results table */
     #resultsTable {
       margin-top: 1em;
       width: 100%;
@@ -48,57 +51,101 @@
       border: 1px solid #ccc;
       padding: 8px;
       text-align: left;
+      vertical-align: top;
     }
     #resultsTable th {
       background-color: #f0f0f0;
+    }
+    pre {
+      margin: 0;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      font-family: monospace;
     }
   </style>
 </head>
 <body>
   <h1>Route Cipher Encoder/Decoder</h1>
 
+  <!-- Mode toggle -->
   <div class="input-group">
-    <label for="plaintext">Enter Plaintext (case and whitespace preserved):</label>
-    <textarea id="plaintext" rows="2">Hello. My name is Inigo Montoya. You killed my father. Prepare to die.</textarea>
+    <label for="modeSelect">Mode:</label>
+    <select id="modeSelect">
+      <option value="encrypt" selected>Encrypt</option>
+      <option value="decrypt">Decrypt</option>
+    </select>
   </div>
 
-  <button id="processBtn">Encrypt & Decrypt</button>
+  <!-- Input field -->
+  <div class="input-group">
+    <label id="inputLabel" for="inputText">Enter Plaintext (case and whitespace preserved):</label>
+    <textarea id="inputText" rows="2">Hello. My name is Inigo Montoya. You killed my father. Prepare to die.</textarea>
+  </div>
+
+  <button id="processBtn">Encrypt</button>
 
   <div class="output-section">
-    <!-- Upper canvas: Step 1 visualization -->
-    <h3>Step 1: Fill the Matrix (text is placed column‐wise and padded with "⁂")</h3>
-    <canvas id="matrixCanvas"></canvas>
-    <!-- Lower canvas: Step 2 visualization -->
-    <h3>Step 2: Read in Spiral Order (starting at the top‑right, going clockwise)</h3>
-    <canvas id="arrowCanvas"></canvas>
+    <!-- Upper canvas -->
+    <h3 id="upperCanvasTitle">Step 1: Fill the Matrix (text is placed column‑wise and padded with "⁂")</h3>
+    <canvas id="upperCanvas"></canvas>
+    <!-- Lower canvas -->
+    <h3 id="lowerCanvasTitle">Step 2: Read in Spiral Order (starting at the top‑right, going clockwise)</h3>
+    <canvas id="lowerCanvas"></canvas>
     <!-- Results table -->
     <table id="resultsTable">
-      <tr>
-        <th>Original Text:</th>
-        <td id="originalResult"></td>
-      </tr>
-      <tr>
-        <th>Encrypted:</th>
-        <td id="ciphertextResult"></td>
-      </tr>
-      <tr>
-        <th>Decrypted:</th>
-        <td id="decryptedResult"></td>
-      </tr>
-      <tr>
-        <th>Verification:</th>
-        <td id="verification"></td>
-      </tr>
+      <tbody id="resultsBody"></tbody>
     </table>
   </div>
 
   <script>
     const ROWS = 3; // fixed number of rows
     const PADDING_CHAR = "⁂"; // unusual padding character
+    const cellWidth = 50;
+    const cellHeight = 50;
+    const initialPlaintext = "Hello. My name is Inigo Montoya. You killed my father. Prepare to die.";
+
+    const modeSelect = document.getElementById("modeSelect");
+    const inputLabel = document.getElementById("inputLabel");
+    const upperCanvasTitle = document.getElementById("upperCanvasTitle");
+    const lowerCanvasTitle = document.getElementById("lowerCanvasTitle");
+    const inputText = document.getElementById("inputText");
+    const processBtn = document.getElementById("processBtn");
+    const resultsBody = document.getElementById("resultsBody");
+    const upperCanvas = document.getElementById("upperCanvas");
+    const lowerCanvas = document.getElementById("lowerCanvas");
+
+    // Reset canvases by clearing their contexts.
+    function clearCanvas(canvas) {
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    // Reset the page when toggling modes.
+    modeSelect.addEventListener("change", function() {
+      if (modeSelect.value === "encrypt") {
+        inputLabel.textContent = "Enter Plaintext (case and whitespace preserved):";
+        upperCanvasTitle.textContent = 'Step 1: Fill the Matrix (text is placed column‑wise and padded with "⁂")';
+        lowerCanvasTitle.textContent = "Step 2: Read in Spiral Order (starting at the top‑right, going clockwise)";
+        processBtn.textContent = "Encrypt";
+        inputText.value = initialPlaintext; // Reset to initial plaintext.
+      } else { // decrypt mode
+        inputLabel.textContent = "Enter Ciphertext:";
+        upperCanvasTitle.textContent = "Step 1: Spiral Insertion (ciphertext fills grid in spiral order)";
+        lowerCanvasTitle.textContent = "Step 2: Column‑wise Reading (grid is read column‑wise to reveal the message)";
+        processBtn.textContent = "Decrypt";
+        inputText.value = ""; // Clear the input text.
+      }
+      // Clear both canvases and the result table.
+      clearCanvas(upperCanvas);
+      clearCanvas(lowerCanvas);
+      resultsBody.innerHTML = "";
+    });
+
+    // --- Common Functions ---
 
     // Fill the grid with the given text as-is.
-    // The number of columns is computed as Math.ceil(text.length / ROWS).
-    // If text length is less than total cells, pad with PADDING_CHAR.
+    // The grid has ROWS rows and columns = ceil(text.length / ROWS).
+    // Pad with PADDING_CHAR if needed.
     function fillGrid(text) {
       const originalLength = text.length;
       const cols = Math.ceil(originalLength / ROWS);
@@ -109,7 +156,6 @@
         grid[r] = [];
       }
       let index = 0;
-      // Fill column-wise (top-to-bottom, left-to-right)
       for (let c = 0; c < cols; c++) {
         for (let r = 0; r < ROWS; r++) {
           grid[r][c] = paddedText.charAt(index++);
@@ -118,35 +164,30 @@
       return { grid, cols, originalLength };
     }
 
-    // Read a ring from the grid in clockwise order starting at the top-right.
+    // Read a ring from the grid in clockwise order starting at the top‑right.
     function readRing(grid, top, bottom, left, right) {
       const ringChars = [];
-      if (top === bottom) { // single row
+      if (top === bottom) {
         for (let j = right; j >= left; j--) {
           ringChars.push(grid[top][j]);
         }
         return ringChars;
       }
-      if (left === right) { // single column
+      if (left === right) {
         for (let i = top; i <= bottom; i++) {
           ringChars.push(grid[i][left]);
         }
         return ringChars;
       }
-      // Clockwise spiral:
-      // 1. Down along the right column.
       for (let i = top; i <= bottom; i++) {
         ringChars.push(grid[i][right]);
       }
-      // 2. Left along the bottom row.
       for (let j = right - 1; j >= left; j--) {
         ringChars.push(grid[bottom][j]);
       }
-      // 3. Up along the left column.
       for (let i = bottom - 1; i >= top; i--) {
         ringChars.push(grid[i][left]);
       }
-      // 4. Right along the top row (excluding already used corners).
       for (let j = left + 1; j < right; j++) {
         ringChars.push(grid[top][j]);
       }
@@ -158,10 +199,7 @@
       let result = "";
       let ring = 0;
       while (true) {
-        const top = ring;
-        const bottom = rows - 1 - ring;
-        const left = ring;
-        const right = cols - 1 - ring;
+        const top = ring, bottom = rows - 1 - ring, left = ring, right = cols - 1 - ring;
         if (top > bottom || left > right) break;
         result += readRing(grid, top, bottom, left, right).join("");
         ring++;
@@ -169,14 +207,7 @@
       return result;
     }
 
-    // Encryption: fill grid then read spiral.
-    function routeEncrypt(plaintext) {
-      const { grid, cols, originalLength } = fillGrid(plaintext);
-      const ciphertext = spiralRead(grid, ROWS, cols);
-      return { ciphertext, grid, cols, originalLength };
-    }
-
-    // --- Decryption Functions ---
+    // Get spiral order coordinates for a ring.
     function getRingCoordinates(top, bottom, left, right) {
       const coords = [];
       if (top === bottom) {
@@ -191,19 +222,15 @@
         }
         return coords;
       }
-      // 1. Down along the right column.
       for (let i = top; i <= bottom; i++) {
         coords.push({ r: i, c: right });
       }
-      // 2. Left along the bottom row.
       for (let j = right - 1; j >= left; j--) {
         coords.push({ r: bottom, c: j });
       }
-      // 3. Up along the left column.
       for (let i = bottom - 1; i >= top; i--) {
         coords.push({ r: i, c: left });
       }
-      // 4. Right along the top row (excluding corners).
       for (let j = left + 1; j < right; j++) {
         coords.push({ r: top, c: j });
       }
@@ -214,19 +241,15 @@
       let coords = [];
       let ring = 0;
       while (true) {
-        const top = ring;
-        const bottom = rows - 1 - ring;
-        const left = ring;
-        const right = cols - 1 - ring;
+        const top = ring, bottom = rows - 1 - ring, left = ring, right = cols - 1 - ring;
         if (top > bottom || left > right) break;
-        const ringCoords = getRingCoordinates(top, bottom, left, right);
-        coords = coords.concat(ringCoords);
+        coords = coords.concat(getRingCoordinates(top, bottom, left, right));
         ring++;
       }
       return coords;
     }
 
-    // Given ciphertext, reconstruct grid by filling in spiral order.
+    // Inverse spiral fill: Given ciphertext, reconstruct grid by filling cells in spiral order.
     function inverseSpiralFill(ciphertext, rows, cols) {
       const coords = getSpiralOrderCoordinates(rows, cols);
       const grid = [];
@@ -240,7 +263,7 @@
       return grid;
     }
 
-    // Read grid column-wise (top-to-bottom, left-to-right).
+    // Read the grid column-wise (top-to-bottom, left-to-right).
     function readGridColumnWise(grid, cols) {
       let result = "";
       for (let c = 0; c < cols; c++) {
@@ -251,94 +274,28 @@
       return result;
     }
 
-    // Decryption: reconstruct grid then read column-wise and remove padding.
-    function routeDecrypt(ciphertext, originalLength) {
-      const cols = ciphertext.length / ROWS;
+    // --- Mode-Specific Operations ---
+
+    // Encrypt Mode:
+    // From plaintext, fill grid and then produce ciphertext by spiral reading.
+    function performEncryption(plaintext) {
+      const { grid, cols, originalLength } = fillGrid(plaintext);
+      const ciphertext = spiralRead(grid, ROWS, cols);
+      return { ciphertext, grid, cols, originalLength };
+    }
+
+    // Decrypt Mode:
+    // From ciphertext, reconstruct grid by inverse spiral fill, then read column-wise.
+    // Remove trailing padding characters.
+    function performDecryption(ciphertext) {
+      const cols = Math.ceil(ciphertext.length / ROWS);
       const grid = inverseSpiralFill(ciphertext, ROWS, cols);
-      const fullText = readGridColumnWise(grid, cols);
-      const decrypted = fullText.slice(0, originalLength);
+      let decrypted = readGridColumnWise(grid, cols);
+      decrypted = decrypted.replace(new RegExp(PADDING_CHAR + "+$"), "");
       return { decrypted, grid, cols };
     }
 
-    // --- Visualization: Canvas Overlays ---
-    const cellWidth = 50;
-    const cellHeight = 50;
-
-    // Draw the grid and overlay the spiral arrow on the "arrowCanvas".
-    function drawSpiralOverlay(grid, cols) {
-      const canvas = document.getElementById("arrowCanvas");
-      canvas.width = cols * cellWidth;
-      canvas.height = ROWS * cellHeight;
-      const ctx = canvas.getContext("2d");
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      // Draw grid cells and letters.
-      ctx.strokeStyle = "#000";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.font = "16px Arial";
-      for (let r = 0; r < ROWS; r++) {
-        for (let c = 0; c < cols; c++) {
-          const x = c * cellWidth;
-          const y = r * cellHeight;
-          ctx.strokeRect(x, y, cellWidth, cellHeight);
-          ctx.fillText(grid[r][c], x + cellWidth / 2, y + cellHeight / 2);
-        }
-      }
-      // Get spiral order coordinates.
-      const spiralCoords = getSpiralOrderCoordinates(ROWS, cols);
-      const centers = spiralCoords.map(coord => ({
-        x: coord.c * cellWidth + cellWidth / 2,
-        y: coord.r * cellHeight + cellHeight / 2
-      }));
-      // Set style for spiral arrow: solid red with 30% opacity.
-      ctx.strokeStyle = "rgba(255,0,0,0.3)";
-      ctx.fillStyle = "rgba(255,0,0,0.3)";
-      ctx.lineWidth = 2;
-      for (let i = 0; i < centers.length - 1; i++) {
-        drawArrow(ctx, centers[i].x, centers[i].y, centers[i+1].x, centers[i+1].y);
-      }
-    }
-
-    // Draw the matrix order overlay on the "matrixCanvas".
-    // This arrow shows the order in which text was placed into the grid (column-wise).
-    function drawMatrixOrderOverlay(grid, cols) {
-      const canvas = document.getElementById("matrixCanvas");
-      canvas.width = cols * cellWidth;
-      canvas.height = ROWS * cellHeight;
-      const ctx = canvas.getContext("2d");
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      // Draw grid cells and letters.
-      ctx.strokeStyle = "#000";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.font = "16px Arial";
-      for (let r = 0; r < ROWS; r++) {
-        for (let c = 0; c < cols; c++) {
-          const x = c * cellWidth;
-          const y = r * cellHeight;
-          ctx.strokeRect(x, y, cellWidth, cellHeight);
-          ctx.fillText(grid[r][c], x + cellWidth / 2, y + cellHeight / 2);
-        }
-      }
-      // Build matrix order: the text was filled column-wise.
-      const matrixCoords = [];
-      for (let c = 0; c < cols; c++) {
-        for (let r = 0; r < ROWS; r++) {
-          matrixCoords.push({ r, c });
-        }
-      }
-      const centers = matrixCoords.map(coord => ({
-        x: coord.c * cellWidth + cellWidth / 2,
-        y: coord.r * cellHeight + cellHeight / 2
-      }));
-      // Set style for matrix order arrow: solid blue with 30% opacity.
-      ctx.strokeStyle = "rgba(0,0,255,0.3)";
-      ctx.fillStyle = "rgba(0,0,255,0.3)";
-      ctx.lineWidth = 2;
-      for (let i = 0; i < centers.length - 1; i++) {
-        drawArrow(ctx, centers[i].x, centers[i].y, centers[i+1].x, centers[i+1].y);
-      }
-    }
+    // --- Visualization Functions ---
 
     // Draw an arrow from (fromX, fromY) to (toX, toY).
     function drawArrow(ctx, fromX, fromY, toX, toY) {
@@ -356,31 +313,197 @@
       ctx.fill();
     }
 
-    // Main event listener.
+    // For Encrypt Mode:
+    // Upper canvas: shows matrix fill order (column-wise) – blue arrow.
+    function drawMatrixOrderOverlay(grid, cols) {
+      const canvas = document.getElementById("upperCanvas");
+      canvas.width = cols * cellWidth;
+      canvas.height = ROWS * cellHeight;
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.strokeStyle = "#000";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = "16px Arial";
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < cols; c++) {
+          const x = c * cellWidth, y = r * cellHeight;
+          ctx.strokeRect(x, y, cellWidth, cellHeight);
+          ctx.fillText(grid[r][c], x + cellWidth / 2, y + cellHeight / 2);
+        }
+      }
+      const order = [];
+      for (let c = 0; c < cols; c++) {
+        for (let r = 0; r < ROWS; r++) {
+          order.push({ r, c });
+        }
+      }
+      const centers = order.map(coord => ({
+        x: coord.c * cellWidth + cellWidth / 2,
+        y: coord.r * cellHeight + cellHeight / 2
+      }));
+      ctx.strokeStyle = "rgba(0,0,255,0.3)"; // blue with 30% opacity
+      ctx.fillStyle = "rgba(0,0,255,0.3)";
+      ctx.lineWidth = 2;
+      for (let i = 0; i < centers.length - 1; i++) {
+        drawArrow(ctx, centers[i].x, centers[i].y, centers[i+1].x, centers[i+1].y);
+      }
+    }
+
+    // For Encrypt Mode:
+    // Lower canvas: shows spiral reading order – red arrow.
+    function drawSpiralOverlay(grid, cols) {
+      const canvas = document.getElementById("lowerCanvas");
+      canvas.width = cols * cellWidth;
+      canvas.height = ROWS * cellHeight;
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.strokeStyle = "#000";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = "16px Arial";
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < cols; c++) {
+          const x = c * cellWidth, y = r * cellHeight;
+          ctx.strokeRect(x, y, cellWidth, cellHeight);
+          ctx.fillText(grid[r][c], x + cellWidth / 2, y + cellHeight / 2);
+        }
+      }
+      const spiralCoords = getSpiralOrderCoordinates(ROWS, cols);
+      const centers = spiralCoords.map(coord => ({
+        x: coord.c * cellWidth + cellWidth / 2,
+        y: coord.r * cellHeight + cellHeight / 2
+      }));
+      ctx.strokeStyle = "rgba(255,0,0,0.3)"; // red with 30% opacity
+      ctx.fillStyle = "rgba(255,0,0,0.3)";
+      ctx.lineWidth = 2;
+      for (let i = 0; i < centers.length - 1; i++) {
+        drawArrow(ctx, centers[i].x, centers[i].y, centers[i+1].x, centers[i+1].y);
+      }
+    }
+
+    // For Decrypt Mode:
+    // Upper canvas: show spiral insertion order (red spiral).
+    function drawDecryptUpperOverlay(grid, cols) {
+      // In Decrypt mode, we use the same spiral overlay as in Encrypt mode.
+      const canvas = document.getElementById("upperCanvas");
+      canvas.width = cols * cellWidth;
+      canvas.height = ROWS * cellHeight;
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.strokeStyle = "#000";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = "16px Arial";
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < cols; c++) {
+          const x = c * cellWidth, y = r * cellHeight;
+          ctx.strokeRect(x, y, cellWidth, cellHeight);
+          ctx.fillText(grid[r][c], x + cellWidth / 2, y + cellHeight / 2);
+        }
+      }
+      const spiralCoords = getSpiralOrderCoordinates(ROWS, cols);
+      const centers = spiralCoords.map(coord => ({
+        x: coord.c * cellWidth + cellWidth / 2,
+        y: coord.r * cellHeight + cellHeight / 2
+      }));
+      ctx.strokeStyle = "rgba(255,0,0,0.3)"; // red with 30% opacity
+      ctx.fillStyle = "rgba(255,0,0,0.3)";
+      ctx.lineWidth = 2;
+      for (let i = 0; i < centers.length - 1; i++) {
+        drawArrow(ctx, centers[i].x, centers[i].y, centers[i+1].x, centers[i+1].y);
+      }
+    }
+
+    // For Decrypt Mode:
+    // Lower canvas: show column‑wise reading order – blue arrow.
+    function drawDecryptLowerOverlay(grid, cols) {
+      const canvas = document.getElementById("lowerCanvas");
+      canvas.width = cols * cellWidth;
+      canvas.height = ROWS * cellHeight;
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.strokeStyle = "#000";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = "16px Arial";
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < cols; c++) {
+          const x = c * cellWidth, y = r * cellHeight;
+          ctx.strokeRect(x, y, cellWidth, cellHeight);
+          ctx.fillText(grid[r][c], x + cellWidth / 2, y + cellHeight / 2);
+        }
+      }
+      const order = [];
+      for (let c = 0; c < cols; c++) {
+        for (let r = 0; r < ROWS; r++) {
+          order.push({ r, c });
+        }
+      }
+      const centers = order.map(coord => ({
+        x: coord.c * cellWidth + cellWidth / 2,
+        y: coord.r * cellHeight + cellHeight / 2
+      }));
+      ctx.strokeStyle = "rgba(0,0,255,0.3)"; // blue with 30% opacity
+      ctx.fillStyle = "rgba(0,0,255,0.3)";
+      ctx.lineWidth = 2;
+      for (let i = 0; i < centers.length - 1; i++) {
+        drawArrow(ctx, centers[i].x, centers[i].y, centers[i+1].x, centers[i+1].y);
+      }
+    }
+
+    // --- Process Button Event Handler ---
     document.getElementById("processBtn").addEventListener("click", function () {
-      const plaintext = document.getElementById("plaintext").value;
-      if (!plaintext) {
-        alert("Please enter some plaintext.");
+      const mode = modeSelect.value;
+      const text = inputText.value;
+      if (!text) {
+        alert("Please enter some text.");
         return;
       }
-      // Encrypt the plaintext.
-      const { ciphertext, grid, cols, originalLength } = routeEncrypt(plaintext);
-      // Decrypt the ciphertext.
-      const { decrypted } = routeDecrypt(ciphertext, originalLength);
-
-      // Update the results table.
-      document.getElementById("originalResult").textContent = plaintext;
-      document.getElementById("ciphertextResult").textContent = ciphertext;
-      document.getElementById("decryptedResult").textContent = decrypted;
-      const verificationMsg = (decrypted === plaintext)
-        ? "Decryption verified: matches original text."
-        : "Decryption error: does not match original text.";
-      document.getElementById("verification").textContent = verificationMsg;
-
-      // Draw the matrix order overlay (upper canvas).
-      drawMatrixOrderOverlay(grid, cols);
-      // Draw the spiral order overlay (lower canvas).
-      drawSpiralOverlay(grid, cols);
+      
+      if (mode === "encrypt") {
+        // Encrypt Mode:
+        const { grid, cols, originalLength } = fillGrid(text);
+        const ciphertext = spiralRead(grid, ROWS, cols);
+        // Verification: reconstruct grid via inverse spiral fill then read column-wise.
+        const gridForDec = inverseSpiralFill(ciphertext, ROWS, cols);
+        let decrypted = readGridColumnWise(gridForDec, cols);
+        decrypted = decrypted.replace(new RegExp(PADDING_CHAR + "+$"), "");
+        
+        resultsBody.innerHTML = `
+          <tr><th>Original Text:</th><td><pre>${text}</pre></td></tr>
+          <tr><th>Encrypted:</th><td><pre>${ciphertext}</pre></td></tr>
+          <tr><th>Decrypted:</th><td><pre>${decrypted}</pre></td></tr>
+          <tr><th>Verification:</th><td><pre>${(decrypted === text) ? "Decryption verified: matches original text." : "Decryption error: does not match original text."}</pre></td></tr>
+        `;
+        
+        // Visualizations for Encrypt Mode.
+        drawMatrixOrderOverlay(grid, cols); // Upper canvas: matrix fill order (blue arrow).
+        drawSpiralOverlay(grid, cols);        // Lower canvas: spiral reading order (red arrow).
+        
+      } else { // Decrypt Mode:
+        const ciphertext = text;
+        if (ciphertext.length % ROWS !== 0) {
+          alert("Ciphertext length is not a multiple of " + ROWS + ". Please check your input.");
+          return;
+        }
+        const cols = Math.ceil(ciphertext.length / ROWS);
+        const grid = inverseSpiralFill(ciphertext, ROWS, cols);
+        let decrypted = readGridColumnWise(grid, cols);
+        decrypted = decrypted.replace(new RegExp(PADDING_CHAR + "+$"), "");
+        
+        resultsBody.innerHTML = `
+          <tr><th>Ciphertext:</th><td><pre>${ciphertext}</pre></td></tr>
+          <tr><th>Decrypted:</th><td><pre>${decrypted}</pre></td></tr>
+          <tr><th>Note:</th><td><pre>Decryption done. (Original text unknown.)</pre></td></tr>
+        `;
+        
+        // Visualizations for Decrypt Mode.
+        // Upper canvas: show spiral insertion order (red spiral).
+        drawDecryptUpperOverlay(grid, cols);
+        // Lower canvas: show column‑wise reading order (blue arrow).
+        drawDecryptLowerOverlay(grid, cols);
+      }
     });
   </script>
 </body>
