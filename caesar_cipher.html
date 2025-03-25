@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Caesar Cipher Encoder/Decoder</title>
+  <title>Caesar Cipher Encryptor/Decryptor</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -56,14 +56,14 @@
   </style>
 </head>
 <body>
-  <h1>Caesar Cipher Encoder/Decoder</h1>
+  <h1>Caesar Cipher Encryptor/Decryptor</h1>
   <div class="section" id="cipherSection">
     <div class="row">
       <div class="control">
         <label for="modeSelect">Mode:</label>
         <select id="modeSelect">
-          <option value="encode" selected>Encode</option>
-          <option value="decode">Decode</option>
+          <option value="encrypt" selected>Encrypt</option>
+          <option value="decrypt">Decrypt</option>
         </select>
       </div>
       <div class="control">
@@ -122,7 +122,7 @@
     // Update UI labels based on the selected mode
     function updateUI() {
       const mode = modeSelect.value;
-      if (mode === "encode") {
+      if (mode === "encrypt") {
         inputLabel.textContent = "Text to Encrypt:";
         outputLabel.textContent = "Encrypted Text:";
       } else {
@@ -137,15 +137,15 @@
       const shift = parseInt(cipherShiftInput.value) || 0;
       const text = cipherTextInput.value;
       let result;
-      if (mode === "encode") {
+      if (mode === "encrypt") {
         result = caesarShift(text, shift);
       } else {
         result = caesarShift(text, -shift);
       }
       cipherResultDisplay.textContent = result;
       
-      // For the disk mapping: use shift for encoding, negative shift for decoding.
-      const mappingShift = (mode === "encode") ? shift : -shift;
+      // For the disk mapping: use shift for encryption, negative shift for decryption.
+      const mappingShift = (mode === "encrypt") ? shift : -shift;
       drawDisk(mappingShift);
     }
 
@@ -158,19 +158,19 @@
 
       // Draw inner circle with standard alphabet
       for (let i = 0; i < 26; i++) {
-        const angle = i * (2 * Math.PI / 26) - Math.PI / 2;
-        const x = centerX + innerRadius * Math.cos(angle);
-        const y = centerY + innerRadius * Math.sin(angle);
+        let angle = i * (2 * Math.PI / 26) - Math.PI/2;
+        let x = centerX + innerRadius * Math.cos(angle);
+        let y = centerY + innerRadius * Math.sin(angle);
         ctx.fillStyle = "black";
         ctx.fillText(alphabet[i], x, y);
       }
 
       // Draw outer circle with shifted alphabet (letters remain upright)
       for (let i = 0; i < 26; i++) {
-        const angle = i * (2 * Math.PI / 26) - Math.PI / 2;
-        const x = centerX + outerRadius * Math.cos(angle);
-        const y = centerY + outerRadius * Math.sin(angle);
-        const shiftedIndex = (i + (shift % 26) + 26) % 26;
+        let angle = i * (2 * Math.PI / 26) - Math.PI/2;
+        let x = centerX + outerRadius * Math.cos(angle);
+        let y = centerY + outerRadius * Math.sin(angle);
+        let shiftedIndex = (i + (shift % 26) + 26) % 26;
         ctx.fillStyle = "blue";
         ctx.fillText(alphabet[shiftedIndex], x, y);
       }
@@ -178,26 +178,26 @@
       // Draw helper circles for the inner and outer rings
       ctx.strokeStyle = "#888";
       ctx.beginPath();
-      ctx.arc(centerX, centerY, innerRadius, 0, 2 * Math.PI);
+      ctx.arc(centerX, centerY, innerRadius, 0, 2*Math.PI);
       ctx.stroke();
       ctx.beginPath();
-      ctx.arc(centerX, centerY, outerRadius, 0, 2 * Math.PI);
+      ctx.arc(centerX, centerY, outerRadius, 0, 2*Math.PI);
       ctx.stroke();
 
       // Draw a red pointer line at the top to indicate the mapping (inner 'A' to outer letter)
       ctx.strokeStyle = "red";
       ctx.beginPath();
-      const innerX = centerX + innerRadius * Math.cos(-Math.PI / 2);
-      const innerY = centerY + innerRadius * Math.sin(-Math.PI / 2);
-      const outerX = centerX + outerRadius * Math.cos(-Math.PI / 2);
-      const outerY = centerY + outerRadius * Math.sin(-Math.PI / 2);
+      let innerX = centerX + innerRadius * Math.cos(-Math.PI/2);
+      let innerY = centerY + innerRadius * Math.sin(-Math.PI/2);
+      let outerX = centerX + outerRadius * Math.cos(-Math.PI/2);
+      let outerY = centerY + outerRadius * Math.sin(-Math.PI/2);
       ctx.moveTo(innerX, innerY);
       ctx.lineTo(outerX, outerY);
       ctx.stroke();
 
       // Display the mapping at the top (for the letter A)
-      const mappingIndex = (0 + (shift % 26) + 26) % 26;
-      const mappingLetter = alphabet[mappingIndex];
+      let mappingIndex = (0 + (shift % 26) + 26) % 26;
+      let mappingLetter = alphabet[mappingIndex];
       ctx.fillStyle = "red";
       ctx.font = "18px Arial";
       ctx.fillText(`A → ${mappingLetter}`, centerX, centerY - outerRadius - 20);
