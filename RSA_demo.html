@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>RSA Demo</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    .section { margin-bottom: 20px; }
+    .hidden { display: none; }
+    .row { display: flex; align-items: center; gap: 10px; }
+    label { display: block; margin-bottom: 5px; }
+    input[type="number"], input[type="text"], select { width: 300px; padding: 5px; }
+    button { padding: 5px 10px; margin-top: 10px; }
+    .result-box { border: 1px solid #ccc; padding: 10px; margin-top: 10px; }
+    table { border-collapse: collapse; margin-top: 10px; }
+    td, th { border: 1px solid #ccc; padding: 5px; }
+  </style>
+</head>
+<body>
+  <h1>RSA Demo</h1>
+  
+  <!-- Mode Toggle Section (like the Caesar code) -->
+  <div class="section">
+    <div class="row">
+      <div class="control">
+        <label for="modeSelect">Mode:</label>
+        <select id="modeSelect">
+          <option value="decrypt" selected>Decrypt</option>
+          <option value="encrypt">Encrypt</option>
+        </select>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Decrypt Mode Section -->
+  <div id="decryptSection" class="section">
+    <h2>Decrypt Mode</h2>
+    <label for="decryptBits">Number of bits (for n):</label>
+    <input type="number" id="decryptBits" value="16">
+    <br>
+    <button id="generateKeysBtn">Generate private and public keys</button>
+    <div id="keyDisplay" class="section"></div>
+    <button id="copyPublicKeyBtn" class="hidden">Copy Public Key</button>
+    <span id="copyFormatText" class="hidden">Copies in format: (bits, n, e)</span>
+    <div id="decryptOperation" class="section hidden">
+      <label for="cipherText">Enter number to decrypt:</label>
+      <input type="number" id="cipherText">
+      <button id="decryptBtn">Decrypt</button>
+      <div id="decryptResult" class="result-box"></div>
+    </div>
+  </div>
+  
+  <!-- Encrypt Mode Section -->
+  <div id="encryptSection" class="section hidden">
+    <h2>Encrypt Mode</h2>
+    <label for="encryptPublicKey">
+      Enter public key in the format: (number of bits, n, e)<br>
+      Example: (16, 143, 7)
+    </label>
+    <input type="text" id="encryptPublicKey" placeholder="(bits, n, e)">
+    <div id="encryptKeyInfo" class="section"></div>
+    <label for="plainText">Enter number to encrypt:</label>
+    <input type="number" id="plainText">
+    <button id="encryptBtn">Encrypt</button>
+    <div id="encryptResult" class="result-box"></div>
+    <button id="copyEncryptedMsgBtn" class="hidden">Copy Encrypted Message</button>
+  </div>
+  
+  <script>
+    // --- Helper Functions using BigInt ---
+    function modPow(base, exponent, modulus) {
+      if (modulus === 1n) return 0n;
+      let result = 1n;
+      base = base % modulus;
+      while (exponent > 0n) {
+        if (exponent % 2n === 1n) result = (result * base) % modulus;
+        exponent = exponent / 2n;
+        base = (base * base) % modulus;
+      }
+      return result;
+    }
+    
+    function gcd(a, b) {
+      while (b !== 0n) {
+        let temp = b;
+        b = a % b;
+        a = temp;
+      }
+      return a;
+    }
+    
+    function modInverse(a, m) {
+      let m0 = m, t, q;
+      let x0 = 0n, x1 = 1n;
+      if (m === 1n) return 0n;
+      while (a > 1n) {
+        q = a / m;
+        t = m;
+        m = a % m;
+        a = t;
+        t = x0;
+        x0 = x1 - q * x0;
+        x1 = t;
+      }
+      if (x1 < 0n) x1 += m0;
+      return x1;
+    }
+    
+    function isProbablePrime(n, k = 5) {
+      if (n < 2n) return false;
+      if (n === 2n || n === 3n) return true;
+      if (n % 2n === 0n) return false;
+      let s = 0n;
+      let d = n - 1n;
+      while (d % 2n === 0n) {
+        d /= 2n;
+        s++;
+      }
+      WitnessLoop:
+      for (let i = 0; i < k; i++) {
+        const a = BigInt(2 + Math.floor(Math.random() * Number(n - 4n)));
+        let x = modPow(a, d, n);
+        if (x === 1n || x === n - 1n) continue;
+        for (let r = 1n; r < s; r++) {
+          x = modPow(x, 2n, n);
+          if (x === n - 1n) continue WitnessLoop;
+        }
+        return false;
+      }
+      return true;
+    }
+    
+    function getRandomBigInt(bits) {
+      let rand = "1";
+      for (let i = 1; i < bits; i++) {
+        rand += Math.random() < 0.5 ? "0" : "1";
+      }
+      return BigInt("0b" + rand);
+    }
+    
+    function getRandomOddBigInt(bits) {
+      let n = getRandomBigInt(bits);
+      if (n % 2n === 0n) n += 1n;
+      return n;
+    }
+    
+    function generateRandomPrime(bits) {
+      let prime = getRandomOddBigInt(bits);
+      while (!isProbablePrime(prime)) {
+        prime = getRandomOddBigInt(bits);
+      }
+      return prime;
+    }
+    
+    function generateKeys(bitLength) {
+      const primeBits = Math.floor(bitLength / 2);
+      let p = generateRandomPrime(primeBits);
+      let q = generateRandomPrime(primeBits);
+      while (p === q) { q = generateRandomPrime(primeBits); }
+      const n = p * q;
+      const phi = (p - 1n) * (q - 1n);
+      let e = null;
+      const candidates = [65537n, 3n, 5n, 7n, 11n, 13n, 17n, 19n, 23n, 29n, 31n];
+      for (let candidate of candidates) {
+        if (candidate < phi && gcd(candidate, phi) === 1n) {
+          e = candidate;
+          break;
+        }
+      }
+      if (e === null) {
+        e = 3n;
+        while (e < phi && gcd(e, phi) !== 1n) { e += 2n; }
+      }
+      const d = modInverse(e, phi);
+      return { bits: bitLength, p, q, n, e, d, phi };
+    }
+    
+    // --- UI Handling for Mode Selection ---
+    const modeSelect = document.getElementById('modeSelect');
+    const decryptSection = document.getElementById('decryptSection');
+    const encryptSection = document.getElementById('encryptSection');
+    
+    function updateMode() {
+      const mode = modeSelect.value;
+      if (mode === "encrypt") {
+        encryptSection.classList.remove("hidden");
+        decryptSection.classList.add("hidden");
+      } else {
+        decryptSection.classList.remove("hidden");
+        encryptSection.classList.add("hidden");
+      }
+    }
+    
+    modeSelect.addEventListener('change', updateMode);
+    updateMode();
+    
+    // Global variables for results and encryption public key tuple
+    let lastEncryptionResult = "";
+    let lastDecryptionResult = "";
+    let currentEncryptPublicKey = null;
+    
+    // --- Decrypt Mode Functionality ---
+    let currentKeys = null;
+    document.getElementById('generateKeysBtn').addEventListener('click', function() {
+      const bits = parseInt(document.getElementById('decryptBits').value);
+      if (bits < 8) {
+        alert("Number of bits must be at least 8.");
+        return;
+      }
+      // Reset decrypt fields
+      document.getElementById('keyDisplay').innerHTML = "";
+      document.getElementById('cipherText').value = "";
+      document.getElementById('decryptResult').innerHTML = "";
+      document.getElementById('copyPublicKeyBtn').classList.add('hidden');
+      document.getElementById('copyFormatText').classList.add('hidden');
+      document.getElementById('decryptOperation').classList.add('hidden');
+    
+      currentKeys = generateKeys(bits);
+      const keyDisplay = document.getElementById('keyDisplay');
+      keyDisplay.innerHTML = `
+        <p><strong>Number of bits (of n):</strong> ${currentKeys.bits}</p>
+        <p><strong>n:</strong> ${currentKeys.n.toString()}</p>
+        <p><strong>e:</strong> ${currentKeys.e.toString()}</p>
+        <p><strong>Private Key d:</strong> ${currentKeys.d.toString()}</p>
+      `;
+      document.getElementById('decryptOperation').classList.remove('hidden');
+      document.getElementById('copyPublicKeyBtn').classList.remove('hidden');
+      document.getElementById('copyFormatText').classList.remove('hidden');
+    });
+    
+    document.getElementById('copyPublicKeyBtn').addEventListener('click', function() {
+      const publicKeyText = `(${currentKeys.bits}, ${currentKeys.n.toString()}, ${currentKeys.e.toString()})`;
+      navigator.clipboard.writeText(publicKeyText).then(() => {
+        alert('Public key copied to clipboard!');
+      });
+    });
+    
+    document.getElementById('decryptBtn').addEventListener('click', function() {
+      const cipherText = BigInt(document.getElementById('cipherText').value);
+      if (!currentKeys) {
+        alert('Please generate keys first.');
+        return;
+      }
+      const m = modPow(cipherText, currentKeys.d, currentKeys.n);
+      lastDecryptionResult = m.toString();
+      const resultDiv = document.getElementById('decryptResult');
+      resultDiv.innerHTML = `
+        <table>
+          <tr>
+            <td><strong>Decryption Equation:</strong></td>
+            <td>m = c<sup>d</sup> mod n</td>
+          </tr>
+          <tr>
+            <td><strong>Given:</strong></td>
+            <td>c = ${cipherText.toString()}, d = ${currentKeys.d.toString()}, n = ${currentKeys.n.toString()}</td>
+          </tr>
+          <tr>
+            <td><strong>Calculation:</strong></td>
+            <td>${cipherText.toString()}<sup>${currentKeys.d.toString()}</sup> mod ${currentKeys.n.toString()} = ${m.toString()}</td>
+          </tr>
+          <tr>
+            <td><strong>Result:</strong></td>
+            <td>m = ${m.toString()}</td>
+          </tr>
+        </table>
+        <p>The encrypted message c = ${cipherText.toString()} decrypts as m = ${m.toString()}.</p>
+      `;
+    });
+    
+    // --- Encrypt Mode Functionality ---
+    function updateEncryptKeyInfo() {
+      const publicKeyInput = document.getElementById('encryptPublicKey').value.trim();
+      const publicKeyMatch = publicKeyInput.match(/^\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/);
+      if (!publicKeyMatch) {
+        if (publicKeyInput !== "") {
+          alert("Please enter the public key in the correct format: (bits, n, e).");
+        }
+        document.getElementById('encryptKeyInfo').innerHTML = "";
+        currentEncryptPublicKey = null;
+        return;
+      }
+      const bits = parseInt(publicKeyMatch[1]);
+      if (bits < 8) {
+        alert("Number of bits must be at least 8.");
+        return;
+      }
+      const n = BigInt(publicKeyMatch[2]);
+      const e = BigInt(publicKeyMatch[3]);
+      currentEncryptPublicKey = { bits, n, e };
+      document.getElementById('encryptKeyInfo').innerHTML = `
+        <p><strong>Public Key Details:</strong></p>
+        <p>Number of bits (of n): ${bits}</p>
+        <p>n: ${n.toString()}</p>
+        <p>e: ${e.toString()}</p>
+      `;
+      // Clear the plaintext and previous result when a new triplet is entered.
+      document.getElementById('plainText').value = "";
+      document.getElementById('encryptResult').innerHTML = "";
+    }
+    
+    const encryptKeyInput = document.getElementById('encryptPublicKey');
+    encryptKeyInput.addEventListener('blur', updateEncryptKeyInfo);
+    encryptKeyInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        updateEncryptKeyInfo();
+      }
+    });
+    
+    document.getElementById('encryptBtn').addEventListener('click', function() {
+      if (currentEncryptPublicKey === null) {
+        alert('Please enter the public key in the correct format: (bits, n, e).');
+        return;
+      }
+      const bits = currentEncryptPublicKey.bits;
+      if (bits < 8) {
+        alert("Number of bits must be at least 8.");
+        return;
+      }
+      const n = currentEncryptPublicKey.n;
+      const e = currentEncryptPublicKey.e;
+      
+      const mValue = BigInt(document.getElementById('plainText').value);
+      const safeMax = (2n ** BigInt(bits)) - 1n;
+      if (mValue < 0n || mValue > safeMax) {
+        alert(`The number to encrypt should be in the safe range 0 to 2^${bits} - 1 (i.e., 0 to ${safeMax.toString()}) to prevent overflow.`);
+        return;
+      }
+      const c = modPow(mValue, e, n);
+      lastEncryptionResult = c.toString();
+      const resultDiv = document.getElementById('encryptResult');
+      resultDiv.innerHTML = `
+        <table>
+          <tr>
+            <td><strong>Encryption Equation:</strong></td>
+            <td>c = m<sup>e</sup> mod n</td>
+          </tr>
+          <tr>
+            <td><strong>Given:</strong></td>
+            <td>m = ${mValue.toString()}, e = ${e.toString()}, n = ${n.toString()}</td>
+          </tr>
+          <tr>
+            <td><strong>Calculation:</strong></td>
+            <td>${mValue.toString()}<sup>${e.toString()}</sup> mod ${n.toString()} = ${c.toString()}</td>
+          </tr>
+          <tr>
+            <td><strong>Result:</strong></td>
+            <td>c = ${c.toString()}</td>
+          </tr>
+        </table>
+        <p>Given the message m = ${mValue.toString()} the encrypted message is c = ${c.toString()}.</p>
+      `;
+      document.getElementById('copyEncryptedMsgBtn').classList.remove('hidden');
+    });
+    
+    document.getElementById('copyEncryptedMsgBtn').addEventListener('click', function() {
+      navigator.clipboard.writeText(lastEncryptionResult).then(() => {
+        alert('Encrypted message copied to clipboard!');
+      });
+    });
+  </script>
+</body>
+</html>
