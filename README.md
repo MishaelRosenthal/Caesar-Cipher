@@ -1,1 +1,1 @@
-https://mishaelrosenthal.github.io/Ciphers/
+https://mishaelrosenthal.github.io/Encryption/
