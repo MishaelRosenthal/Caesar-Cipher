@@ -472,7 +472,7 @@
         
         resultsBody.innerHTML = `
           <tr><th>Original Text:</th><td><pre>${text}</pre></td></tr>
-          <tr><th>Encrypted:</th><td><pre>${ciphertext}</pre></td></tr>
+          <tr><th>Ciphertext:</th><td><pre>${ciphertext}</pre></td></tr>
           <tr><th>Decrypted:</th><td><pre>${decrypted}</pre></td></tr>
           <tr><th>Verification:</th><td><pre>${(decrypted === text) ? "Decryption verified: matches original text." : "Decryption error: does not match original text."}</pre></td></tr>
         `;
