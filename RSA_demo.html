@@ -19,7 +19,7 @@
 <body>
   <h1>RSA Demo</h1>
   
-  <!-- Mode Toggle Section (like the Caesar code) -->
+  <!-- Mode Toggle Section -->
   <div class="section">
     <div class="row">
       <div class="control">
@@ -35,13 +35,13 @@
   <!-- Decrypt Mode Section -->
   <div id="decryptSection" class="section">
     <h2>Decrypt Mode</h2>
-    <label for="decryptBits">Number of bits (for n):</label>
+    <label for="decryptBits">Number of bits (for n modulus):</label>
     <input type="number" id="decryptBits" value="16">
     <br>
     <button id="generateKeysBtn">Generate Private and Public Keys</button>
     <div id="keyDisplay" class="section"></div>
     <button id="copyPublicKeyBtn" class="hidden">Copy Public Keys</button>
-    <span id="copyFormatText" class="hidden">Copies in format: (bits, n, e)</span>
+    <span id="copyFormatText" class="hidden">Copies in format: (bits, n modulus (the product of two large primes), e public exponent)</span>
     <div id="decryptOperation" class="section hidden">
       <label for="cipherText">Enter number to decrypt:</label>
       <input type="number" id="cipherText">
@@ -54,7 +54,7 @@
   <div id="encryptSection" class="section hidden">
     <h2>Encrypt Mode</h2>
     <label for="encryptPublicKey">
-      Enter public key in the format: (number of bits, n, e)<br>
+      Enter public key in the format: (number of bits, n modulus (the product of two large primes), e public exponent)<br>
       Example: (16, 143, 7)
     </label>
     <input type="text" id="encryptPublicKey" placeholder="(bits, n, e)">
@@ -218,10 +218,10 @@
       currentKeys = generateKeys(bits);
       const keyDisplay = document.getElementById('keyDisplay');
       keyDisplay.innerHTML = `
-        <p><strong>Number of bits (of n):</strong> ${currentKeys.bits}</p>
-        <p><strong>n:</strong> ${currentKeys.n.toString()}</p>
-        <p><strong>e:</strong> ${currentKeys.e.toString()}</p>
-        <p><strong>Private Key d:</strong> ${currentKeys.d.toString()}</p>
+        <p><strong>Number of bits (for n modulus):</strong> ${currentKeys.bits}</p>
+        <p><strong>n modulus (the product of two large primes):</strong> ${currentKeys.n.toString()}</p>
+        <p><strong>e public exponent:</strong> ${currentKeys.e.toString()}</p>
+        <p><strong>d private exponent:</strong> ${currentKeys.d.toString()}</p>
       `;
       document.getElementById('decryptOperation').classList.remove('hidden');
       document.getElementById('copyPublicKeyBtn').classList.remove('hidden');
@@ -248,11 +248,11 @@
         <table>
           <tr>
             <td><strong>Decryption Equation:</strong></td>
-            <td>m = c<sup>d</sup> mod n</td>
+            <td>M = C<sup>d</sup> mod n</td>
           </tr>
           <tr>
             <td><strong>Given:</strong></td>
-            <td>c = ${cipherText.toString()}, d = ${currentKeys.d.toString()}, n = ${currentKeys.n.toString()}</td>
+            <td>C ciphertext = ${cipherText.toString()}, d private exponent = ${currentKeys.d.toString()}, n modulus (the product of two large primes) = ${currentKeys.n.toString()}</td>
           </tr>
           <tr>
             <td><strong>Calculation:</strong></td>
@@ -260,10 +260,10 @@
           </tr>
           <tr>
             <td><strong>Result:</strong></td>
-            <td>m = ${m.toString()}</td>
+            <td>M = ${m.toString()}</td>
           </tr>
         </table>
-        <p>The encrypted message c = ${cipherText.toString()} decrypts as m = ${m.toString()}.</p>
+        <p>The ciphertext C = ${cipherText.toString()} decrypts as plaintext M = ${m.toString()}.</p>
       `;
     });
     
@@ -273,7 +273,7 @@
       const publicKeyMatch = publicKeyInput.match(/^\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/);
       if (!publicKeyMatch) {
         if (publicKeyInput !== "") {
-          alert("Please enter the public key in the correct format: (bits, n, e).");
+          alert("Please enter the public key in the correct format: (bits, n modulus (the product of two large primes), e public exponent).");
         }
         document.getElementById('encryptKeyInfo').innerHTML = "";
         currentEncryptPublicKey = null;
@@ -289,9 +289,9 @@
       currentEncryptPublicKey = { bits, n, e };
       document.getElementById('encryptKeyInfo').innerHTML = `
         <p><strong>Public Key Details:</strong></p>
-        <p>Number of bits (of n): ${bits}</p>
-        <p>n: ${n.toString()}</p>
-        <p>e: ${e.toString()}</p>
+        <p>Number of bits (for n modulus): ${bits}</p>
+        <p>n modulus (the product of two large primes): ${n.toString()}</p>
+        <p>e public exponent: ${e.toString()}</p>
       `;
       // Clear the plaintext and previous result when a new triplet is entered.
       document.getElementById('plainText').value = "";
@@ -308,7 +308,7 @@
     
     document.getElementById('encryptBtn').addEventListener('click', function() {
       if (currentEncryptPublicKey === null) {
-        alert('Please enter the public key in the correct format: (bits, n, e).');
+        alert('Please enter the public key in the correct format: (bits, n modulus (the product of two large primes), e public exponent).');
         return;
       }
       const bits = currentEncryptPublicKey.bits;
@@ -332,11 +332,11 @@
         <table>
           <tr>
             <td><strong>Encryption Equation:</strong></td>
-            <td>c = m<sup>e</sup> mod n</td>
+            <td>C = M<sup>e</sup> mod n</td>
           </tr>
           <tr>
             <td><strong>Given:</strong></td>
-            <td>m = ${mValue.toString()}, e = ${e.toString()}, n = ${n.toString()}</td>
+            <td>M plaintext = ${mValue.toString()}, e public exponent = ${e.toString()}, n modulus (the product of two large primes) = ${n.toString()}</td>
           </tr>
           <tr>
             <td><strong>Calculation:</strong></td>
@@ -344,10 +344,10 @@
           </tr>
           <tr>
             <td><strong>Result:</strong></td>
-            <td>c = ${c.toString()}</td>
+            <td>C = ${c.toString()}</td>
           </tr>
         </table>
-        <p>Given the message m = ${mValue.toString()} the encrypted message is c = ${c.toString()}.</p>
+        <p>Given the plaintext M = ${mValue.toString()} the ciphertext is C = ${c.toString()}.</p>
       `;
       document.getElementById('copyEncryptedMsgBtn').classList.remove('hidden');
     });
